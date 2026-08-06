@@ -1,176 +1,333 @@
 # WP Remote SEO Bridge
 
-A secure WordPress REST API bridge for remote SEO auditing, meta updates, and schema injection. Plug-and-play across any WordPress site.
+**Version:** 1.5.0  
+**Author:** Karl Badeo  
+**License:** MIT  
+**Requires PHP:** 7.4+  
+**Namespace:** `wseb/v1`  
+**Plugin URI:** https://github.com/kbadeo/wp-remote-seo-bridge
 
-## Features
+---
 
-- Auto-detects Yoast SEO or RankMath and writes to the correct fields
-- Auto-detects Header and Footer Scripts plugin (Anand Kumar) for schema injection
-- Auto-detects and purges LiteSpeed, WP Rocket, W3TC, and WP Super Cache
-- Admin token by default, optional scoped read/write tokens
-- Self-deactivation timer (set it and forget it on client sites)
-- Full audit log with timestamp, endpoint, IP, scope, and status
-- Backup before every write operation
-- Schema validation catches invalid JSON and unknown properties before they reach the database
-- Webhook on write for Make / Zapier / Slack integration
-- Dry-run support on update and schema endpoints
-- Per-endpoint enable/disable toggles
+## Overview
 
-## Installation
+WP Remote SEO Bridge is a secure WordPress REST API plugin that enables bulk SEO meta and schema injection from external scripts. It is used to push per-page schema markup and SEO meta titles/descriptions to WordPress sites remotely without logging into WP Admin.
 
-1. Upload `wp-remote-seo-bridge.zip` via **Plugins > Add New > Upload Plugin**
-2. Activate the plugin
-3. Go to **Settings > Remote SEO Bridge**
-4. Copy the auto-generated admin token
-5. Use the token in your API calls
+It integrates with:
+- **Header and Footer Scripts by Anand Kumar** for schema injection (per-page and sitewide)
+- **Rank Math** and **Yoast SEO** for SEO meta title, description, and focus keyword writes
+- **LiteSpeed Cache, WP Rocket, W3 Total Cache, WP Super Cache** for cache purging after writes
+
+---
 
 ## Authentication
 
-Pass the token via header or query parameter:
+Every request must include the API token in the request header:
 
 ```
-X-SEO-Bridge-Token: your-token-here
+X-WSEB-Token: YOUR_TOKEN_HERE
 ```
 
-or
+The back-compat alias `X-SEO-Bridge-Token` is also accepted for older scripts.
 
-```
-?token=your-token-here
-```
+The token is auto-generated on plugin activation and is visible in **WP Admin > Settings > Remote SEO Bridge**.
+
+Token behaviour:
+- Tokens never expire by default (expiry hours = 0)
+- An optional expiry timer can be set in the admin panel (hours from token creation)
+- Tokens can be regenerated at any time from the admin panel
+
+---
+
+## Admin Panel
+
+Located at **WP Admin > Settings > Remote SEO Bridge**.
+
+Shows:
+- Current API token (click to select all)
+- Correct request header format
+- Detected SEO plugin (Rank Math, Yoast, or none)
+- Base REST URL for all endpoints
+- Token regeneration checkbox
+- Token expiry timer (hours, 0 = never)
+- Webhook URL for write notifications
+- Per-endpoint enable/disable toggles
+- Audit log (last 50 entries)
+
+---
 
 ## Endpoints
 
-Base URL: `https://yoursite.com/wp-json/seo-bridge/v1`
+All endpoints are under: `https://yoursite.com/wp-json/wseb/v1/`
 
-| Endpoint | Method | Scope | Description |
-|---|---|---|---|
-| `/ping` | GET | read | Connectivity test, site info, detected plugins |
-| `/health` | GET | read | WP/PHP versions, sitemap, robots.txt, cache plugins |
-| `/scan` | GET | read | All posts and terms with Yoast AND RankMath meta |
-| `/taxonomies` | GET | read | All taxonomies with term counts |
-| `/meta-scan?post_id=X` | GET | read | Single post full meta decoded |
-| `/lookup` | POST | read | Resolve slugs to post/term IDs |
-| `/update` | POST | write | Write SEO meta, auto-routes Yoast or RankMath |
-| `/schema` | POST | write | Inject schema into header script field |
-| `/options` | GET+POST | admin | Read/write wp_options directly |
-| `/purge-cache` | POST | write | Auto-detects and purges all known cache plugins |
+### GET /ping
 
-## Usage Examples
+Confirms the bridge is reachable and the token is valid. Use this at the start of any push script to verify connectivity before making writes.
 
-**Ping:**
-```bash
-curl -s "https://yoursite.com/wp-json/seo-bridge/v1/ping?token=YOUR_TOKEN"
-```
-
-**Health check:**
-```bash
-curl -s "https://yoursite.com/wp-json/seo-bridge/v1/health?token=YOUR_TOKEN"
-```
-
-**Scan all pages:**
-```bash
-curl -s "https://yoursite.com/wp-json/seo-bridge/v1/scan?token=YOUR_TOKEN"
-```
-
-**Update SEO meta (dry run first):**
-```bash
-curl -s -X POST "https://yoursite.com/wp-json/seo-bridge/v1/update?token=YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  --data @update_payload.json
-```
-
-Payload format:
+**Response:**
 ```json
 {
-  "dry_run": true,
-  "updates": [
+  "success": true,
+  "version": "1.5.0",
+  "site": "https://yoursite.com",
+  "seo_plugin": "rankmath",
+  "php": "8.1.0"
+}
+```
+
+---
+
+### GET /health
+
+Returns environment information including SEO plugin, HFS plugin variant, WooCommerce status, WordPress version, PHP version, and database version.
+
+**Response:**
+```json
+{
+  "success": true,
+  "seo_plugin": "rankmath",
+  "hfs_plugin": "shfs",
+  "woocommerce": "not active",
+  "wp_version": "6.5.0",
+  "php_version": "8.1.0",
+  "db_version": "8.0.0",
+  "plugin_version": "1.5.0"
+}
+```
+
+---
+
+### GET /scan
+
+Lists all published posts, pages, products, and custom post types with their post ID, URL, post type, post title, SEO title, SEO description, and detected SEO plugin.
+
+Use this to build a URL-to-post-ID map before pushing schemas. There is no /lookup endpoint. /scan is the correct way to resolve post IDs.
+
+**Query parameters:**
+- `post_type` — filter by post type slug (comma-separated), default `any`
+- `per_page` — results per page, max 500, default 200
+- `page` — page number for pagination, default 1
+
+**Response:**
+```json
+{
+  "success": true,
+  "total": 34,
+  "page": 1,
+  "per_page": 200,
+  "total_pages": 1,
+  "posts": [
     {
-      "type": "post",
-      "id": 123,
-      "title": "Your SEO Title | Site Name",
-      "description": "Your meta description here."
-    },
-    {
-      "type": "term",
-      "id": 45,
-      "taxonomy": "category",
-      "title": "Category SEO Title | Site Name",
-      "description": "Category meta description."
+      "id": 12,
+      "url": "https://yoursite.com/about-us/",
+      "post_type": "page",
+      "post_title": "About Us",
+      "seo_title": "About Us | Site Name",
+      "seo_desc": "Description here",
+      "seo_plugin": "rankmath"
     }
   ]
 }
 ```
 
-**Inject schema:**
-```bash
-curl -s -X POST "https://yoursite.com/wp-json/seo-bridge/v1/schema?token=YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  --data @schema_payload.json
+---
+
+### GET /scan-terms
+
+Lists all terms in all public taxonomies (or a specified taxonomy) with term ID, taxonomy, name, slug, URL, post count, SEO title, SEO description, and detected SEO plugin.
+
+**Query parameters:**
+- `taxonomy` — filter by taxonomy slug (comma-separated), default `any`
+
+---
+
+### POST /meta
+
+Writes SEO title, description, and/or focus keyword to one or more posts, pages, or products. Accepts a single object or an array of objects. Supports Rank Math and Yoast SEO.
+
+**Payload (single or batch array):**
+```json
+[
+  { "post_id": 12, "title": "Title One", "description": "Desc one.", "focus_keyword": "keyword" },
+  { "post_id": 15, "title": "Title Two", "description": "Desc two." }
+]
 ```
 
-Payload format:
+All three fields are optional — only include what you want to update.
+
+---
+
+### POST /meta-terms
+
+Writes SEO title, description, and/or focus keyword to taxonomy terms.
+
+**Payload:**
+```json
+[
+  {
+    "term_id": 5,
+    "taxonomy": "product_cat",
+    "title": "Category SEO Title",
+    "description": "Category meta description.",
+    "focus_keyword": "category keyword"
+  }
+]
+```
+
+---
+
+### POST /schema
+
+Injects a JSON-LD schema block into a post/page, **or** a taxonomy term (category, product category, tag, etc). Which target is used depends on the payload shape.
+
+**Posts/pages (via HFS)**
+
+Writes to both `shfs_all_post_meta` (synth_header_script) and `_inpost_head_script` so the schema is visible in the HFS admin metabox and outputs correctly on the front end.
+
+A backup of the previous schema is saved before every write (last 5 per post in `wseb_schema_backup_{post_id}` in wp_options).
+
+**Payload:**
 ```json
 {
-  "dry_run": false,
-  "page_schemas": [
-    {
-      "post_id": 123,
-      "schema": "<script type=\"application/ld+json\">\n{ \"@context\": \"https://schema.org\", \"@type\": \"WebPage\" }\n</script>"
-    }
-  ],
-  "term_schemas": [
-    {
-      "term_id": 45,
-      "taxonomy": "category",
-      "schema": "<script type=\"application/ld+json\">\n{ \"@context\": \"https://schema.org\", \"@type\": \"WebPage\" }\n</script>"
-    }
-  ]
+  "post_id": 12,
+  "schema": "<script type=\"application/ld+json\">\n{ ... }\n</script>"
 }
 ```
 
-**Purge cache:**
-```bash
-curl -s -X POST "https://yoursite.com/wp-json/seo-bridge/v1/purge-cache?token=YOUR_TOKEN"
+**Taxonomy terms / product categories (via ACF field)**
+
+The Anand Kumar HFS plugin does not attach to term/category archive pages, so term schema is written instead to an ACF field on the term — `header_script` by default. Configurable in **WP Admin > Settings > Remote SEO Bridge** ("Term Schema ACF Field") if your ACF field is named differently.
+
+If ACF is active when the bridge plugin is activated, the field group is created automatically with a location rule for every public taxonomy (categories, product categories, tags, etc). If ACF is installed later, or new taxonomies are added afterwards, click "Create / Sync ACF Field" on the settings page to (re)create it — safe to run any time, it upserts by field group key rather than duplicating. Falls back to plain term meta if ACF isn't active at all.
+
+Because every theme wires up its `<head>` output differently, the settings page also shows a ready-to-paste `wp_head` snippet (with the configured field name baked in) to output the pushed schema on term archive pages — there is no automatic front-end injection for terms.
+
+A backup of the previous schema is saved before every write (last 5 per term in `wseb_term_schema_backup_{taxonomy}_{term_id}` in wp_options).
+
+**IMPORTANT:** Use /scan-terms first to get the term ID for each taxonomy URL.
+
+**Payload:**
+```json
+{
+  "term_id": 5,
+  "taxonomy": "product_cat",
+  "schema": "<script type=\"application/ld+json\">\n{ ... }\n</script>"
+}
 ```
 
-## Scoped Tokens (Optional)
+**IMPORTANT:** Use /scan first to get the post ID for each URL. There is no /lookup endpoint.
 
-By default a single admin token grants full access. To restrict access:
+---
 
-1. Go to **Settings > Remote SEO Bridge**
-2. Enable **Scoped Tokens**
-3. Generate a **Read** token (ping, scan, health, meta-scan only)
-4. Generate a **Write** token (update, schema, purge-cache)
+### POST /sitewide-schema
 
-## Self-Deactivation Timer
+Writes a sitewide JSON-LD schema block to the global header field of the Anand Kumar HFS plugin. This schema outputs on every page of the site.
 
-Set an expiry in hours under **Settings > Remote SEO Bridge**. The plugin deactivates itself via WP-Cron when the timer expires. Recommended for client sites — set to 24 hours while working, then it cleans up automatically.
+Auto-detects the correct wp_options key across all known HFS variants: `jamify_hfs_insert_header`, `shfs_insert_header`, `hfs_insert_header`. If none found, defaults to `shfs_insert_header`.
 
-## Security Notes
+All existing `<script type="application/ld+json">` blocks are stripped from the global header before writing. Non-schema content is preserved.
 
-- Rotate the admin token after each session on client sites
-- Use the self-deactivation timer on any site you do not manage day-to-day
-- Enable scoped tokens when sharing read access with reporting tools
-- The plugin logs all API calls — check the audit log if you suspect unauthorized access
-- Deactivate and delete the plugin when not in use
+A backup of the previous sitewide schema is saved before every write (last 5 in `wseb_sitewide_schema_backup` in wp_options).
 
-## Supported Plugins
+**Payload:**
+```json
+{
+  "schema": "<script type=\"application/ld+json\">\n{ ... }\n</script>"
+}
+```
 
-**SEO:**
-- Yoast SEO
-- RankMath
+---
 
-**Header Script Injection:**
-- Header and Footer Scripts by Anand Kumar (`_inpost_head_script`)
-- WPCode (`_wpcode_head_script`)
-- Head, Footer and Post Injections (`_hfip_header`)
+### POST /purge-cache
 
-**Cache:**
-- LiteSpeed Cache
-- WP Rocket
-- W3 Total Cache
-- WP Super Cache
+Purges the site cache. Supports LiteSpeed Cache, WP Rocket, W3 Total Cache, WP Super Cache. If `post_id` is provided, purges only that post. If omitted, purges the full site.
 
-## License
+**Payload (optional):**
+```json
+{ "post_id": 12 }
+```
 
-GPL-2.0-or-later
+---
+
+## Schema Write Behaviour
+
+### Per-page (/schema)
+
+1. Reads existing value from `shfs_all_post_meta` and `_inpost_head_script`
+2. Backs up to `wseb_schema_backup_{post_id}` (last 5 snapshots)
+3. Strips all ld+json blocks from existing value
+4. Writes new schema block to both `shfs_all_post_meta` and `_inpost_head_script`
+5. WordPress handles serialization automatically — never call serialize() manually
+6. Purges cache for that post
+
+### Sitewide (/sitewide-schema)
+
+1. Detects correct HFS wp_options key via `wseb_detect_hfs_option_key()`
+2. Backs up to `wseb_sitewide_schema_backup` (last 5 snapshots)
+3. Strips all ld+json blocks from global header value
+4. Writes new schema block alongside any preserved non-schema content
+5. Purges full site cache
+
+---
+
+## Push Script Pattern
+
+```python
+# 1. Ping to confirm bridge is reachable
+GET /ping
+
+# 2. Push sitewide schema
+POST /sitewide-schema  {"schema": "..."}
+
+# 3. Scan to build URL -> post_id map
+GET /scan?per_page=500
+
+# 4. For each page push per-page schema
+POST /schema  {"post_id": 12, "schema": "..."}
+```
+
+---
+
+## Audit Log
+
+Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, method, scope, status, IP, and note. Last 50 entries visible in the admin panel.
+
+---
+
+## Changelog
+
+### 1.5.0
+- `/schema` now accepts `term_id` + `taxonomy` to push schema to taxonomy terms (categories, product categories, tags, etc), writing to an ACF field (`header_script` by default) instead of the HFS plugin, which doesn't attach to term archive pages
+- Added `wseb_write_term_schema()`, `wseb_read_term_schema()`, `wseb_backup_term_schema()` helpers
+- Added "Term Schema ACF Field" setting in the admin panel to configure the ACF field name
+- Backup before write for term schema, mirroring the existing post schema backup behaviour (last 5 per term)
+- Added `wseb_sync_acf_term_schema_field()`: auto-creates/syncs the ACF field group (with a location rule per public taxonomy) on plugin activation if ACF is active, plus a "Create / Sync ACF Field" admin button for installing ACF later or after adding new taxonomies
+- Added a copy-paste `wp_head` snippet on the settings page to output term schema in the front end, since theme structure varies per site and can't be injected automatically
+
+### 1.4.0
+- Fixed `wseb_write_post_schema` to write to both `shfs_all_post_meta` and `_inpost_head_script`
+- Removed manual `serialize()` call — double-serialization was corrupting data
+- Fixed `wseb_write_sitewide_schema` to detect all known HFS option key variants via new `wseb_detect_hfs_option_key()` helper
+- Fixed `wseb_read_post_schema` to check both meta keys with fallback
+- Re-added backup before every write (dropped in v1.3.0): `wseb_backup_post_schema()` and `wseb_backup_sitewide_schema()`
+- Added this README
+
+### 1.3.0
+- Added `/scan-terms` and `/meta-terms` endpoints for taxonomy term SEO
+- Added `wseb_get_term_seo()` and `wseb_set_term_seo()` helpers
+- Added `/health` endpoint
+- Renamed namespace from `seo-bridge/v1` to `wseb/v1`
+- Back-compat alias: `X-SEO-Bridge-Token` still accepted
+- Backup before write dropped in this version (restored in 1.4.0)
+
+### 1.2.0
+- Added `/sitewide-schema` endpoint
+- Scoped tokens, self-deactivation timer, audit log, webhook, schema validation
+- Backup before overwrite (last 5), per-endpoint toggles, dry-run, cache purge
+
+### 1.1.0
+- Added `/sitewide-schema` writing to global HFS head field
+- Auto-detects HFS option key, preserves non-schema head scripts
+
+### 1.0.0
+- Initial build generalised from SB Peak Bridge
