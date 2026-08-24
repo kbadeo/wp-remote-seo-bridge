@@ -9,7 +9,7 @@
  *               and an ACF field for taxonomy term schema (categories, product categories, etc).
  *               Also reads/updates each SEO plugin's llms.txt (AI visibility) settings,
  *               and can push a fully custom llms.txt file directly to the site root.
- * Version:      1.7.1
+ * Version:      1.8.0
  * Author:       Karl Badeo
  * License:      MIT
  * Requires PHP: 7.4
@@ -17,7 +17,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WSEB_VERSION',   '1.7.1' );
+define( 'WSEB_VERSION',   '1.8.0' );
 define( 'WSEB_OPTION',    'wseb_settings' );
 define( 'WSEB_NS',        'wseb/v1' );
 define( 'WSEB_LOG_TABLE', 'wseb_audit_log' );
@@ -672,6 +672,19 @@ function wseb_admin_page() {
         }
     }
 
+    // Handle llms.txt enable/disable toggle (runs through the detected SEO
+    // plugin's own settings — no REST payload needed for the common case)
+    if ( isset( $_POST['wseb_toggle_llms'] ) && check_admin_referer( 'wseb_save' ) ) {
+        $current     = wseb_get_llms_settings();
+        $new_enabled = empty( $current['enabled'] );
+        $plugin      = wseb_set_llms_settings( [ 'enabled' => $new_enabled ] );
+        if ( $plugin === 'none' ) {
+            echo '<div class="notice notice-error"><p>No supported SEO plugin (Yoast or Rank Math) detected.</p></div>';
+        } else {
+            echo '<div class="notice notice-success"><p>llms.txt ' . ( $new_enabled ? 'enabled' : 'disabled' ) . ' for <strong>' . esc_html( $plugin ) . '</strong>.</p></div>';
+        }
+    }
+
     // Handle save
     if ( isset( $_POST['wseb_save'] ) && check_admin_referer( 'wseb_save' ) ) {
         if ( isset( $_POST['wseb_regenerate'] ) ) {
@@ -752,6 +765,41 @@ function wseb_admin_page() {
                 <input type="submit" name="wseb_save" class="button button-primary" value="Save Settings">
             </p>
         </form>
+
+        <h2>llms.txt (AI Visibility)</h2>
+        <div class="postbox" style="padding:16px;max-width:800px;">
+            <?php $llms = wseb_get_llms_settings(); ?>
+            <p>
+                Detected SEO plugin: <strong><?php echo esc_html( $llms['seo_plugin'] ); ?></strong>
+                &nbsp;|&nbsp; llms.txt: <strong><?php echo ! empty( $llms['enabled'] ) ? '<span style="color:#1a6b3a">Enabled</span>' : '<span style="color:#c0392b">Disabled</span>'; ?></strong>
+            </p>
+            <?php if ( $llms['seo_plugin'] === 'rankmath' ) : ?>
+                <p class="description" style="max-width:640px;">
+                    Post types: <code><?php echo esc_html( implode( ', ', $llms['post_types'] ?: [ 'none' ] ) ); ?></code>
+                    &nbsp;|&nbsp; Taxonomies: <code><?php echo esc_html( implode( ', ', $llms['taxonomies'] ?: [ 'none' ] ) ); ?></code>
+                    &nbsp;|&nbsp; Limit: <code><?php echo esc_html( $llms['limit'] ); ?></code>
+                </p>
+            <?php elseif ( $llms['seo_plugin'] === 'yoast' ) : ?>
+                <p class="description" style="max-width:640px;">
+                    Selection mode: <code><?php echo esc_html( $llms['selection_mode'] ); ?></code>
+                </p>
+            <?php endif; ?>
+            <p class="description" style="max-width:640px;">
+                Toggling this runs through the detected plugin's own settings (Yoast's <code>enable_llms_txt</code>, or Rank Math's
+                <code>llms-txt</code> module) — the same thing <code>POST /llms-settings</code> does remotely, available here for a
+                one-click change. Enabling Rank Math for the first time auto-fills sensible post types/taxonomies, since — unlike
+                Yoast — it has no auto mode and would otherwise generate a near-empty file.
+            </p>
+            <form method="post">
+                <?php wp_nonce_field( 'wseb_save' ); ?>
+                <input type="submit" name="wseb_toggle_llms" class="button<?php echo empty( $llms['enabled'] ) ? ' button-primary' : ''; ?>"
+                    value="<?php echo empty( $llms['enabled'] ) ? 'Enable llms.txt' : 'Disable llms.txt'; ?>"
+                    <?php disabled( $llms['seo_plugin'] === 'none' ); ?>>
+                <?php if ( $llms['seo_plugin'] === 'none' ) : ?>
+                    <span class="description">&nbsp;No supported SEO plugin (Yoast or Rank Math) detected.</span>
+                <?php endif; ?>
+            </form>
+        </div>
 
         <h2>Taxonomy Term Schema (ACF)</h2>
         <div class="postbox" style="padding:16px;max-width:800px;">

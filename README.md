@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.7.1  
+**Version:** 1.8.0  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -68,7 +68,7 @@ Confirms the bridge is reachable and the token is valid. Use this at the start o
 ```json
 {
   "success": true,
-  "version": "1.7.1",
+  "version": "1.8.0",
   "site": "https://yoursite.com",
   "seo_plugin": "rankmath",
   "php": "8.1.0"
@@ -91,7 +91,7 @@ Returns environment information including SEO plugin, HFS plugin variant, WooCom
   "wp_version": "6.5.0",
   "php_version": "8.1.0",
   "db_version": "8.0.0",
-  "plugin_version": "1.7.1"
+  "plugin_version": "1.8.0"
 }
 ```
 
@@ -416,6 +416,10 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.8.0
+- Added an "llms.txt (AI Visibility)" panel to the admin settings page with a one-click Enable/Disable button, running through the same `wseb_get_llms_settings()`/`wseb_set_llms_settings()` code as `POST /llms-settings` — no REST payload needed for the common case of just turning it on or off
+- Shows current status (detected plugin, enabled/disabled, and Rank Math's post types/taxonomies/limit or Yoast's selection mode) directly in wp-admin
 
 ### 1.7.1
 - `POST /llms-settings` now auto-seeds sensible `post_types`/`taxonomies` defaults for Rank Math on first enable (unless explicitly provided), since Rank Math — unlike Yoast — has no "auto" mode and silently skips any section left unconfigured, which previously meant enabling the module alone produced a near-empty file
