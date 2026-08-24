@@ -9,7 +9,7 @@
  *               and an ACF field for taxonomy term schema (categories, product categories, etc).
  *               Also reads/updates each SEO plugin's llms.txt (AI visibility) settings,
  *               and can push a fully custom llms.txt file directly to the site root.
- * Version:      1.8.0
+ * Version:      1.8.1
  * Author:       Karl Badeo
  * License:      MIT
  * Requires PHP: 7.4
@@ -17,7 +17,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WSEB_VERSION',   '1.8.0' );
+define( 'WSEB_VERSION',   '1.8.1' );
 define( 'WSEB_OPTION',    'wseb_settings' );
 define( 'WSEB_NS',        'wseb/v1' );
 define( 'WSEB_LOG_TABLE', 'wseb_audit_log' );
@@ -127,7 +127,7 @@ function wseb_ok( $data = [] ) {
 // =============================================================================
 
 function wseb_detect_seo_plugin() {
-    if ( defined( 'RANK_MATH_VERSION' ) || get_option( 'rank_math_general' ) !== false ) return 'rankmath';
+    if ( defined( 'RANK_MATH_VERSION' ) || get_option( 'rank-math-options-general' ) !== false ) return 'rankmath';
     if ( defined( 'WPSEO_VERSION' )     || get_option( 'wpseo' )             !== false ) return 'yoast';
     return 'none';
 }
@@ -249,7 +249,10 @@ function wseb_set_term_seo( $term_id, $taxonomy, $title = null, $description = n
  * Yoast stores the llms.txt on/off flag as 'enable_llms_txt' inside the
  * single-row 'wpseo' option, and page-selection settings in 'wpseo_llmstxt'.
  * Rank Math stores the on/off flag as module id 'llms-txt' in the
- * 'rank_math_modules' list, and its own field settings in 'rank_math_general'.
+ * 'rank_math_modules' list, and its own field settings in the
+ * 'rank-math-options-general' option (note the hyphens — this is the actual
+ * CMB2 options-page key registered in RankMath\Settings::__construct(), not
+ * the more guessable 'rank_math_general').
  * Writing via update_option() (rather than the plugins' internal option
  * helpers) is sufficient — both plugins react to the standard
  * 'update_option_{name}' hooks to regenerate/remove the actual llms.txt file.
@@ -276,7 +279,7 @@ function wseb_get_llms_settings() {
     }
 
     if ( $seo === 'rankmath' ) {
-        $general = (array) get_option( 'rank_math_general', [] );
+        $general = (array) get_option( 'rank-math-options-general', [] );
         $modules = (array) get_option( 'rank_math_modules', [] );
         return [
             'seo_plugin'    => 'rankmath',
@@ -337,7 +340,7 @@ function wseb_set_llms_settings( $body ) {
             }
         }
 
-        $general = (array) get_option( 'rank_math_general', [] );
+        $general = (array) get_option( 'rank-math-options-general', [] );
         $dirty   = false;
 
         // Unlike Yoast, Rank Math has no "auto" mode — add_post_types_data()
@@ -371,7 +374,7 @@ function wseb_set_llms_settings( $body ) {
             $general['llms_extra_content'] = sanitize_textarea_field( $body['extra_content'] );
             $dirty = true;
         }
-        if ( $dirty ) update_option( 'rank_math_general', $general );
+        if ( $dirty ) update_option( 'rank-math-options-general', $general );
 
         return 'rankmath';
     }

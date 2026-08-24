@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.8.0  
+**Version:** 1.8.1  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -68,7 +68,7 @@ Confirms the bridge is reachable and the token is valid. Use this at the start o
 ```json
 {
   "success": true,
-  "version": "1.8.0",
+  "version": "1.8.1",
   "site": "https://yoursite.com",
   "seo_plugin": "rankmath",
   "php": "8.1.0"
@@ -91,7 +91,7 @@ Returns environment information including SEO plugin, HFS plugin variant, WooCom
   "wp_version": "6.5.0",
   "php_version": "8.1.0",
   "db_version": "8.0.0",
-  "plugin_version": "1.8.0"
+  "plugin_version": "1.8.1"
 }
 ```
 
@@ -417,6 +417,10 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 
 ## Changelog
 
+### 1.8.1
+- **Bugfix:** Rank Math's General Settings option name is `rank-math-options-general` (hyphenated CMB2 options-page key, per `RankMath\Settings::__construct()`), not `rank_math_general` as previously assumed — the wrong option name meant `llms_post_types`/`llms_taxonomies`/`llms_limit`/`llms_extra_content` writes silently went nowhere the plugin ever read from, leaving the Edit llms.txt screen showing nothing selected even after "enabling" via the bridge
+- Fixed in `wseb_detect_seo_plugin()` and both `wseb_get_llms_settings()`/`wseb_set_llms_settings()` — this only affected llms.txt settings; the meta/schema endpoints use separate, independently-correct option/meta keys (`rank_math_title`, `rank_math_term_meta`, `rank_math_modules`) and were unaffected
+
 ### 1.8.0
 - Added an "llms.txt (AI Visibility)" panel to the admin settings page with a one-click Enable/Disable button, running through the same `wseb_get_llms_settings()`/`wseb_set_llms_settings()` code as `POST /llms-settings` — no REST payload needed for the common case of just turning it on or off
 - Shows current status (detected plugin, enabled/disabled, and Rank Math's post types/taxonomies/limit or Yoast's selection mode) directly in wp-admin
@@ -433,7 +437,7 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ### 1.6.0
 - Added `GET /llms-settings` and `POST /llms-settings` to read/update the detected SEO plugin's llms.txt (AI visibility) configuration
 - Yoast: toggles `enable_llms_txt` in the `wpseo` option, and page-selection settings in `wpseo_llmstxt` (`llms_txt_selection_mode`, `about_us_page`, `contact_page`, `terms_page`, `privacy_policy_page`, `shop_page`, `other_included_pages`)
-- Rank Math: toggles the `llms-txt` module in `rank_math_modules`, and field settings in `rank_math_general` (`llms_post_types`, `llms_taxonomies`, `llms_limit`, `llms_extra_content`)
+- Rank Math: toggles the `llms-txt` module in `rank_math_modules`, and field settings in `rank-math-options-general` (`llms_post_types`, `llms_taxonomies`, `llms_limit`, `llms_extra_content`)
 - Added `wseb_get_llms_settings()` / `wseb_set_llms_settings()` helpers and the `llms_settings` endpoint toggle
 
 ### 1.5.0
