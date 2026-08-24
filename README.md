@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.6.0  
+**Version:** 1.7.0  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -68,7 +68,7 @@ Confirms the bridge is reachable and the token is valid. Use this at the start o
 ```json
 {
   "success": true,
-  "version": "1.6.0",
+  "version": "1.7.0",
   "site": "https://yoursite.com",
   "seo_plugin": "rankmath",
   "php": "8.1.0"
@@ -91,7 +91,7 @@ Returns environment information including SEO plugin, HFS plugin variant, WooCom
   "wp_version": "6.5.0",
   "php_version": "8.1.0",
   "db_version": "8.0.0",
-  "plugin_version": "1.6.0"
+  "plugin_version": "1.7.0"
 }
 ```
 
@@ -258,6 +258,43 @@ Response is the same shape as `GET /llms-settings`, reflecting the state after t
 
 ---
 
+### GET /llms-txt
+
+Reads the raw `llms.txt` file currently on disk at the site root (if any), independent of any SEO plugin.
+
+**Response:**
+```json
+{
+  "success": true,
+  "exists": true,
+  "writable": true,
+  "content": "# Site Name\n\n> ...\n"
+}
+```
+
+---
+
+### POST /llms-txt
+
+Pushes fully custom `llms.txt` content, written directly to the site root via `WP_Filesystem` — this is the option to reach for when neither Yoast's page-selection nor Rank Math's "Additional Content" field (see `POST /llms-settings` above) is expressive enough and you want full control over the file.
+
+This bypasses both plugins' generators rather than fighting them: standard WordPress `.htaccess`/nginx rewrite rules always serve a real file directly from disk before a request ever reaches WordPress's own routing, so a physical `llms.txt` here wins regardless of which SEO plugin is active. Yoast's own generator is explicitly designed to cooperate with this — it hashes the content it writes, and backs off without overwriting if the file on disk no longer matches that hash.
+
+After a successful write, this endpoint also calls the same code as `POST /llms-settings` with `{"enabled": false}` to turn off the detected plugin's own llms.txt toggle, so there's no stale "managed by us" state left in its admin UI or cron.
+
+A backup of the previous file content is saved before every write (last 5 in `wseb_llms_txt_backup` in wp_options).
+
+**Requires filesystem write access to the site root** — same requirement Yoast's own llms.txt feature has. If unavailable (e.g. certain managed-hosting or FTP-only setups), the write fails with a 500 and a clear error rather than silently doing nothing.
+
+**Payload:**
+```json
+{
+  "content": "# Site Name\n\n> A short description of the site.\n\n## Pages\n\n- [About](https://yoursite.com/about/): About page\n"
+}
+```
+
+---
+
 ### POST /schema
 
 Injects a JSON-LD schema block into a post/page, **or** a taxonomy term (category, product category, tag, etc). Which target is used depends on the payload shape.
@@ -377,6 +414,12 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.7.0
+- Added `GET /llms-txt` and `POST /llms-txt` to push a fully custom `llms.txt` file, written directly to the site root via `WP_Filesystem` — for when neither Yoast's page-selection nor Rank Math's "Additional Content" field is expressive enough
+- A physical file at the site root wins over both plugins' generators at the webserver level (standard `.htaccess`/nginx rewrite rules serve a real file before WordPress routing even runs); the write also disables the detected plugin's own llms.txt toggle afterwards to avoid a stale "managed by us" state
+- Backup before write for the raw file, mirroring existing backup behaviour (last 5 in `wseb_llms_txt_backup`)
+- Added `wseb_write_llms_txt()`, `wseb_read_llms_txt()`, `wseb_backup_llms_txt()`, `wseb_init_filesystem()` helpers and the `llms_txt` endpoint toggle
 
 ### 1.6.0
 - Added `GET /llms-settings` and `POST /llms-settings` to read/update the detected SEO plugin's llms.txt (AI visibility) configuration
