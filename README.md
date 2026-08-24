@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.5.0  
+**Version:** 1.6.0  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -68,7 +68,7 @@ Confirms the bridge is reachable and the token is valid. Use this at the start o
 ```json
 {
   "success": true,
-  "version": "1.5.0",
+  "version": "1.6.0",
   "site": "https://yoursite.com",
   "seo_plugin": "rankmath",
   "php": "8.1.0"
@@ -91,7 +91,7 @@ Returns environment information including SEO plugin, HFS plugin variant, WooCom
   "wp_version": "6.5.0",
   "php_version": "8.1.0",
   "db_version": "8.0.0",
-  "plugin_version": "1.5.0"
+  "plugin_version": "1.6.0"
 }
 ```
 
@@ -173,6 +173,88 @@ Writes SEO title, description, and/or focus keyword to taxonomy terms.
   }
 ]
 ```
+
+---
+
+### GET /llms-settings
+
+Reads the llms.txt (AI visibility) configuration for whichever SEO plugin is detected.
+
+**Yoast SEO response:**
+```json
+{
+  "success": true,
+  "seo_plugin": "yoast",
+  "enabled": true,
+  "selection_mode": "auto",
+  "pages": {
+    "about_us_page": null,
+    "contact_page": null,
+    "terms_page": null,
+    "privacy_policy_page": null,
+    "shop_page": null,
+    "other_included_pages": []
+  }
+}
+```
+
+**Rank Math response:**
+```json
+{
+  "success": true,
+  "seo_plugin": "rankmath",
+  "enabled": true,
+  "post_types": ["post", "page", "product"],
+  "taxonomies": ["category", "product_cat"],
+  "limit": 50,
+  "extra_content": ""
+}
+```
+
+If neither plugin is active: `{ "seo_plugin": "none", "enabled": false }`.
+
+---
+
+### POST /llms-settings
+
+Updates the llms.txt configuration for whichever SEO plugin is detected. All fields are optional — only send what you want to change. Fields specific to the other plugin are ignored (e.g. sending `post_types` on a Yoast site does nothing).
+
+Writes directly via `update_option()`, which both plugins already watch (`update_option_wpseo` for Yoast, module state for Rank Math) to regenerate or remove the actual `/llms.txt` file — no need to trigger that separately.
+
+**Common:**
+- `enabled` — boolean. Turns the llms.txt feature on/off (Yoast: `enable_llms_txt` in the `wpseo` option; Rank Math: adds/removes the `llms-txt` module in `rank_math_modules`).
+
+**Yoast-only:**
+- `selection_mode` — `"auto"` or `"manual"`
+- `pages` — object with `about_us_page`, `contact_page`, `terms_page`, `privacy_policy_page`, `shop_page` (post IDs), and `other_included_pages` (array of post IDs)
+
+**Rank Math-only:**
+- `post_types` — array of post type slugs to include
+- `taxonomies` — array of taxonomy slugs to include
+- `limit` — max links per post type/taxonomy
+- `extra_content` — free text/links appended to the file manually
+
+**Payload (Rank Math example):**
+```json
+{
+  "enabled": true,
+  "post_types": ["post", "page", "product"],
+  "taxonomies": ["product_cat"],
+  "limit": 100,
+  "extra_content": "Company overview: https://yoursite.com/about"
+}
+```
+
+**Payload (Yoast example):**
+```json
+{
+  "enabled": true,
+  "selection_mode": "manual",
+  "pages": { "about_us_page": 12, "contact_page": 15 }
+}
+```
+
+Response is the same shape as `GET /llms-settings`, reflecting the state after the write.
 
 ---
 
@@ -295,6 +377,12 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.6.0
+- Added `GET /llms-settings` and `POST /llms-settings` to read/update the detected SEO plugin's llms.txt (AI visibility) configuration
+- Yoast: toggles `enable_llms_txt` in the `wpseo` option, and page-selection settings in `wpseo_llmstxt` (`llms_txt_selection_mode`, `about_us_page`, `contact_page`, `terms_page`, `privacy_policy_page`, `shop_page`, `other_included_pages`)
+- Rank Math: toggles the `llms-txt` module in `rank_math_modules`, and field settings in `rank_math_general` (`llms_post_types`, `llms_taxonomies`, `llms_limit`, `llms_extra_content`)
+- Added `wseb_get_llms_settings()` / `wseb_set_llms_settings()` helpers and the `llms_settings` endpoint toggle
 
 ### 1.5.0
 - `/schema` now accepts `term_id` + `taxonomy` to push schema to taxonomy terms (categories, product categories, tags, etc), writing to an ACF field (`header_script` by default) instead of the HFS plugin, which doesn't attach to term archive pages

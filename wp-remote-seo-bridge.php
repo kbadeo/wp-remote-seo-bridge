@@ -7,7 +7,8 @@
  *               WooCommerce products, and taxonomy terms (product categories, tags, etc).
  *               Integrates with Header and Footer Scripts by Anand Kumar for post/page schema,
  *               and an ACF field for taxonomy term schema (categories, product categories, etc).
- * Version:      1.5.0
+ *               Also reads/updates each SEO plugin's llms.txt (AI visibility) settings.
+ * Version:      1.6.0
  * Author:       Karl Badeo
  * License:      MIT
  * Requires PHP: 7.4
@@ -15,7 +16,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WSEB_VERSION',   '1.5.0' );
+define( 'WSEB_VERSION',   '1.6.0' );
 define( 'WSEB_OPTION',    'wseb_settings' );
 define( 'WSEB_NS',        'wseb/v1' );
 define( 'WSEB_LOG_TABLE', 'wseb_audit_log' );
@@ -38,6 +39,7 @@ function wseb_activate() {
             'ep_scan_terms'      => 1,
             'ep_meta'            => 1,
             'ep_meta_terms'      => 1,
+            'ep_llms_settings'   => 1,
             'ep_schema'          => 1,
             'ep_sitewide_schema' => 1,
             'ep_purge_cache'     => 1,
@@ -232,6 +234,128 @@ function wseb_set_term_seo( $term_id, $taxonomy, $title = null, $description = n
         if ( $focus_kw    !== null ) $all[ $taxonomy ][ $term_id ]['wpseo_focuskw'] = $focus_kw;
         update_option( 'wpseo_taxonomy_meta', $all );
         return 'yoast';
+    }
+
+    return 'none';
+}
+
+// =============================================================================
+// LLMS.TXT SETTINGS (Yoast SEO / Rank Math)
+// =============================================================================
+
+/**
+ * Yoast stores the llms.txt on/off flag as 'enable_llms_txt' inside the
+ * single-row 'wpseo' option, and page-selection settings in 'wpseo_llmstxt'.
+ * Rank Math stores the on/off flag as module id 'llms-txt' in the
+ * 'rank_math_modules' list, and its own field settings in 'rank_math_general'.
+ * Writing via update_option() (rather than the plugins' internal option
+ * helpers) is sufficient — both plugins react to the standard
+ * 'update_option_{name}' hooks to regenerate/remove the actual llms.txt file.
+ */
+function wseb_get_llms_settings() {
+    $seo = wseb_detect_seo_plugin();
+
+    if ( $seo === 'yoast' ) {
+        $wpseo   = (array) get_option( 'wpseo', [] );
+        $llmstxt = (array) get_option( 'wpseo_llmstxt', [] );
+        return [
+            'seo_plugin'     => 'yoast',
+            'enabled'        => ! empty( $wpseo['enable_llms_txt'] ),
+            'selection_mode' => $llmstxt['llms_txt_selection_mode']  ?? 'auto',
+            'pages'          => [
+                'about_us_page'        => $llmstxt['about_us_page']        ?? null,
+                'contact_page'         => $llmstxt['contact_page']         ?? null,
+                'terms_page'           => $llmstxt['terms_page']           ?? null,
+                'privacy_policy_page'  => $llmstxt['privacy_policy_page']  ?? null,
+                'shop_page'            => $llmstxt['shop_page']            ?? null,
+                'other_included_pages' => $llmstxt['other_included_pages'] ?? [],
+            ],
+        ];
+    }
+
+    if ( $seo === 'rankmath' ) {
+        $general = (array) get_option( 'rank_math_general', [] );
+        $modules = (array) get_option( 'rank_math_modules', [] );
+        return [
+            'seo_plugin'    => 'rankmath',
+            'enabled'       => in_array( 'llms-txt', $modules, true ),
+            'post_types'    => $general['llms_post_types']    ?? [],
+            'taxonomies'    => $general['llms_taxonomies']    ?? [],
+            'limit'         => $general['llms_limit']         ?? 50,
+            'extra_content' => $general['llms_extra_content'] ?? '',
+        ];
+    }
+
+    return [ 'seo_plugin' => 'none', 'enabled' => false ];
+}
+
+function wseb_set_llms_settings( $body ) {
+    $seo = wseb_detect_seo_plugin();
+
+    if ( $seo === 'yoast' ) {
+        if ( isset( $body['enabled'] ) ) {
+            $wpseo = (array) get_option( 'wpseo', [] );
+            $wpseo['enable_llms_txt'] = (bool) $body['enabled'];
+            update_option( 'wpseo', $wpseo );
+        }
+
+        $llmstxt = (array) get_option( 'wpseo_llmstxt', [] );
+        $dirty   = false;
+        if ( isset( $body['selection_mode'] ) ) {
+            $llmstxt['llms_txt_selection_mode'] = sanitize_key( $body['selection_mode'] );
+            $dirty = true;
+        }
+        if ( isset( $body['pages'] ) && is_array( $body['pages'] ) ) {
+            foreach ( [ 'about_us_page', 'contact_page', 'terms_page', 'privacy_policy_page', 'shop_page' ] as $key ) {
+                if ( isset( $body['pages'][ $key ] ) ) {
+                    $llmstxt[ $key ] = absint( $body['pages'][ $key ] );
+                    $dirty = true;
+                }
+            }
+            if ( isset( $body['pages']['other_included_pages'] ) && is_array( $body['pages']['other_included_pages'] ) ) {
+                $llmstxt['other_included_pages'] = array_map( 'absint', $body['pages']['other_included_pages'] );
+                $dirty = true;
+            }
+        }
+        if ( $dirty ) update_option( 'wpseo_llmstxt', $llmstxt );
+
+        return 'yoast';
+    }
+
+    if ( $seo === 'rankmath' ) {
+        if ( isset( $body['enabled'] ) ) {
+            $modules = (array) get_option( 'rank_math_modules', [] );
+            $is_on   = in_array( 'llms-txt', $modules, true );
+            if ( $body['enabled'] && ! $is_on ) {
+                $modules[] = 'llms-txt';
+                update_option( 'rank_math_modules', array_values( array_unique( $modules ) ) );
+            } elseif ( ! $body['enabled'] && $is_on ) {
+                $modules = array_diff( $modules, [ 'llms-txt' ] );
+                update_option( 'rank_math_modules', array_values( $modules ) );
+            }
+        }
+
+        $general = (array) get_option( 'rank_math_general', [] );
+        $dirty   = false;
+        if ( isset( $body['post_types'] ) && is_array( $body['post_types'] ) ) {
+            $general['llms_post_types'] = array_map( 'sanitize_key', $body['post_types'] );
+            $dirty = true;
+        }
+        if ( isset( $body['taxonomies'] ) && is_array( $body['taxonomies'] ) ) {
+            $general['llms_taxonomies'] = array_map( 'sanitize_key', $body['taxonomies'] );
+            $dirty = true;
+        }
+        if ( isset( $body['limit'] ) ) {
+            $general['llms_limit'] = max( 1, absint( $body['limit'] ) );
+            $dirty = true;
+        }
+        if ( isset( $body['extra_content'] ) ) {
+            $general['llms_extra_content'] = sanitize_textarea_field( $body['extra_content'] );
+            $dirty = true;
+        }
+        if ( $dirty ) update_option( 'rank_math_general', $general );
+
+        return 'rankmath';
     }
 
     return 'none';
@@ -476,7 +600,7 @@ function wseb_admin_page() {
         $s['expiry_hours']      = max( 0, intval( $_POST['expiry_hours'] ?? 0 ) );
         $s['webhook_url']       = esc_url_raw( $_POST['webhook_url'] ?? '' );
         $s['term_schema_field'] = sanitize_key( $_POST['term_schema_field'] ?? 'header_script' ) ?: 'header_script';
-        $eps = [ 'ping','health','scan','scan_terms','meta','meta_terms','schema','sitewide_schema','purge_cache' ];
+        $eps = [ 'ping','health','scan','scan_terms','meta','meta_terms','llms_settings','schema','sitewide_schema','purge_cache' ];
         foreach ( $eps as $ep ) {
             $s[ 'ep_' . $ep ] = ! empty( $_POST[ 'ep_' . $ep ] ) ? 1 : 0;
         }
@@ -528,6 +652,7 @@ function wseb_admin_page() {
                         'scan_terms'      => '/scan-terms — list all taxonomy terms',
                         'meta'            => '/meta — write SEO meta to posts/products',
                         'meta_terms'      => '/meta-terms — write SEO meta to taxonomy terms',
+                        'llms_settings'   => '/llms-settings — read/update the SEO plugin\'s llms.txt config',
                         'schema'          => '/schema — inject per-page schema',
                         'sitewide_schema' => '/sitewide-schema — inject global schema',
                         'purge_cache'     => '/purge-cache — clear site cache',
@@ -841,6 +966,39 @@ function wseb_register_routes() {
             }
 
             return rest_ensure_response( $results );
+        },
+    ] );
+
+    // ── GET /llms-settings — read llms.txt config for the detected SEO plugin ─
+    register_rest_route( WSEB_NS, '/llms-settings', [
+        'methods'             => 'GET',
+        'permission_callback' => '__return_true',
+        'callback'            => function ( WP_REST_Request $req ) {
+            if ( ! wseb_ep_enabled( 'llms_settings' ) ) return wseb_deny( 'Endpoint disabled' );
+            if ( ! wseb_auth( $req ) )                   return wseb_deny();
+            wseb_log( 'llms_settings', 'GET', 'read', 'ok' );
+            return wseb_ok( wseb_get_llms_settings() );
+        },
+    ] );
+
+    // ── POST /llms-settings — update llms.txt config for the detected SEO plugin
+    register_rest_route( WSEB_NS, '/llms-settings', [
+        'methods'             => 'POST',
+        'permission_callback' => '__return_true',
+        'callback'            => function ( WP_REST_Request $req ) {
+            if ( ! wseb_ep_enabled( 'llms_settings' ) ) return wseb_deny( 'Endpoint disabled' );
+            if ( ! wseb_auth( $req ) )                   return wseb_deny();
+
+            $body = $req->get_json_params();
+            if ( ! is_array( $body ) ) return new WP_Error( 'wseb_bad_request', 'Empty or invalid JSON body', [ 'status' => 400 ] );
+
+            $plugin = wseb_set_llms_settings( $body );
+            if ( $plugin === 'none' ) {
+                return new WP_Error( 'wseb_no_seo_plugin', 'No supported SEO plugin (Yoast or Rank Math) detected.', [ 'status' => 400 ] );
+            }
+
+            wseb_log( 'llms_settings', 'POST', 'write', 'ok', null, [ 'seo_plugin' => $plugin ] );
+            return wseb_ok( wseb_get_llms_settings() );
         },
     ] );
 
