@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.7.0  
+**Version:** 1.7.1  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -68,7 +68,7 @@ Confirms the bridge is reachable and the token is valid. Use this at the start o
 ```json
 {
   "success": true,
-  "version": "1.7.0",
+  "version": "1.7.1",
   "site": "https://yoursite.com",
   "seo_plugin": "rankmath",
   "php": "8.1.0"
@@ -91,7 +91,7 @@ Returns environment information including SEO plugin, HFS plugin variant, WooCom
   "wp_version": "6.5.0",
   "php_version": "8.1.0",
   "db_version": "8.0.0",
-  "plugin_version": "1.7.0"
+  "plugin_version": "1.7.1"
 }
 ```
 
@@ -233,6 +233,8 @@ Writes directly via `update_option()`, which both plugins already watch (`update
 - `taxonomies` — array of taxonomy slugs to include
 - `limit` — max links per post type/taxonomy
 - `extra_content` — free text/links appended to the file manually
+
+**Important — Rank Math has no "auto" mode.** Unlike Yoast, which populates a sensible file with zero extra config, Rank Math's `add_post_types_data()`/`add_taxonomies_data()` silently skip any section left unconfigured — enabling the module alone produces a file with only the site title, an optional sitemap link, and `extra_content`, with no actual page listing. To avoid that trap, sending `{"enabled": true}` with no explicit `post_types`/`taxonomies` (and none already configured) auto-seeds sensible defaults — `post`, `page`, and `product`/`product_cat` if WooCommerce is active. Pass your own `post_types`/`taxonomies` in the same call to skip the defaults and use exactly what you specify.
 
 **Payload (Rank Math example):**
 ```json
@@ -414,6 +416,9 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.7.1
+- `POST /llms-settings` now auto-seeds sensible `post_types`/`taxonomies` defaults for Rank Math on first enable (unless explicitly provided), since Rank Math — unlike Yoast — has no "auto" mode and silently skips any section left unconfigured, which previously meant enabling the module alone produced a near-empty file
 
 ### 1.7.0
 - Added `GET /llms-txt` and `POST /llms-txt` to push a fully custom `llms.txt` file, written directly to the site root via `WP_Filesystem` — for when neither Yoast's page-selection nor Rank Math's "Additional Content" field is expressive enough

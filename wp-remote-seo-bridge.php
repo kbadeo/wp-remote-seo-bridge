@@ -9,7 +9,7 @@
  *               and an ACF field for taxonomy term schema (categories, product categories, etc).
  *               Also reads/updates each SEO plugin's llms.txt (AI visibility) settings,
  *               and can push a fully custom llms.txt file directly to the site root.
- * Version:      1.7.0
+ * Version:      1.7.1
  * Author:       Karl Badeo
  * License:      MIT
  * Requires PHP: 7.4
@@ -17,7 +17,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WSEB_VERSION',   '1.7.0' );
+define( 'WSEB_VERSION',   '1.7.1' );
 define( 'WSEB_OPTION',    'wseb_settings' );
 define( 'WSEB_NS',        'wseb/v1' );
 define( 'WSEB_LOG_TABLE', 'wseb_audit_log' );
@@ -339,6 +339,22 @@ function wseb_set_llms_settings( $body ) {
 
         $general = (array) get_option( 'rank_math_general', [] );
         $dirty   = false;
+
+        // Unlike Yoast, Rank Math has no "auto" mode — add_post_types_data()
+        // and add_taxonomies_data() silently skip any section left
+        // unconfigured. Seed sensible defaults on first enable (unless the
+        // caller explicitly set their own) so the file isn't just a bare
+        // header + sitemap link.
+        $enabling_now      = isset( $body['enabled'] ) && $body['enabled'] === true;
+        $no_explicit_types = ! isset( $body['post_types'] ) && ! isset( $body['taxonomies'] );
+        if ( $enabling_now && $no_explicit_types && empty( $general['llms_post_types'] ) ) {
+            $public_post_types = get_post_types( [ 'public' => true ], 'names' );
+            $public_taxonomies = get_taxonomies( [ 'public' => true ], 'names' );
+            $general['llms_post_types'] = array_values( array_intersect( [ 'post', 'page', 'product' ], $public_post_types ) );
+            $general['llms_taxonomies'] = array_values( array_intersect( [ 'category', 'product_cat' ], $public_taxonomies ) );
+            $dirty = true;
+        }
+
         if ( isset( $body['post_types'] ) && is_array( $body['post_types'] ) ) {
             $general['llms_post_types'] = array_map( 'sanitize_key', $body['post_types'] );
             $dirty = true;
