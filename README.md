@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.8.1  
+**Version:** 1.9.0  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -41,9 +41,9 @@ Token behaviour:
 
 ## Admin Panel
 
-Located at **WP Admin > Settings > Remote SEO Bridge**.
+Located at **WP Admin > Settings > Remote SEO Bridge**, split across two tabs.
 
-Shows:
+**Settings tab:**
 - Current API token (click to select all)
 - Correct request header format
 - Detected SEO plugin (Rank Math, Yoast, or none)
@@ -51,8 +51,25 @@ Shows:
 - Token regeneration checkbox
 - Token expiry timer (hours, 0 = never)
 - Webhook URL for write notifications
+- Term Schema ACF field name setting
+- llms.txt (AI Visibility) one-click Enable/Disable
+- Taxonomy Term Schema (ACF) create/sync button and front-end output snippet
 - Per-endpoint enable/disable toggles
 - Audit log (last 50 entries)
+
+**SEO Exporter tab:** exports SEO metadata to CSV — see below.
+
+---
+
+## SEO Exporter (admin tab)
+
+A CSV export tool merged in from the standalone SEO Data Exporter plugin, on its own tab so it doesn't need a separate plugin install. Unlike the rest of the bridge (Yoast/Rank Math only), the exporter also reads **All in One SEO**, plus a raw-postmeta fallback (`_seo_title`/`_seo_description`/`_canonical`) when no supported plugin is detected — since it's read-only, covering more plugins here doesn't carry the same risk as the write endpoints.
+
+Select post types and/or taxonomies (all checked by default), optionally include the sitewide schema block as its own row, and click **Export to CSV**. A live "Ready to export N rows" counter updates as you check/uncheck things, and the file downloads as a UTF-8 CSV (with BOM, so Excel opens it correctly) — no REST call needed, this is a plain wp-admin download.
+
+**Exported columns:** `ID`, `Type` (`post`/`term`/`sitewide`), `Post Type / Taxonomy`, `Title`, `URL`, `Status`, `SEO Title`, `SEO Description`, `Canonical URL`, `Robots Noindex`, `Robots Nofollow`, `OG Title`, `OG Description`, `OG Image`, `Twitter Title`, `Twitter Description`, `Twitter Image`, `Focus Keyword`, `Cornerstone` (Yoast only), `Schema`, `SEO Plugin`.
+
+The `Schema` column reuses the bridge's own schema helpers (`wseb_read_post_schema()` / `wseb_read_term_schema()`), so it reflects exactly what `/schema` would read back for that post or term. The sitewide schema, if included, gets its own row (`Type: sitewide`, `Title: Sitewide Schema`) rather than being attached to any single post/term, since it applies site-wide.
 
 ---
 
@@ -68,7 +85,7 @@ Confirms the bridge is reachable and the token is valid. Use this at the start o
 ```json
 {
   "success": true,
-  "version": "1.8.1",
+  "version": "1.9.0",
   "site": "https://yoursite.com",
   "seo_plugin": "rankmath",
   "php": "8.1.0"
@@ -91,7 +108,7 @@ Returns environment information including SEO plugin, HFS plugin variant, WooCom
   "wp_version": "6.5.0",
   "php_version": "8.1.0",
   "db_version": "8.0.0",
-  "plugin_version": "1.8.1"
+  "plugin_version": "1.9.0"
 }
 ```
 
@@ -416,6 +433,13 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.9.0
+- Merged in the standalone SEO Data Exporter plugin as a "SEO Exporter" tab on the admin settings page, so a separate plugin install is no longer needed
+- Adds All in One SEO support and a raw-postmeta fallback for export purposes (read-only, broader than the write endpoints' Yoast/Rank Math scope) via `wseb_exporter_detect_plugin()`
+- Added a `Schema` CSV column reusing the bridge's own `wseb_read_post_schema()`/`wseb_read_term_schema()`, plus an optional sitewide-schema row (`Type: sitewide`) via a new checkbox
+- CSV download via `admin-post.php?action=wseb_export_download`, with a live row-count preview via `wp_ajax_wseb_export_counts` — a plain wp-admin download, no REST call
+- Admin page restructured into tabs (`?tab=settings` / `?tab=exporter`); existing settings content unchanged, just moved under the Settings tab
 
 ### 1.8.1
 - **Bugfix:** Rank Math's General Settings option name is `rank-math-options-general` (hyphenated CMB2 options-page key, per `RankMath\Settings::__construct()`), not `rank_math_general` as previously assumed — the wrong option name meant `llms_post_types`/`llms_taxonomies`/`llms_limit`/`llms_extra_content` writes silently went nowhere the plugin ever read from, leaving the Edit llms.txt screen showing nothing selected even after "enabling" via the bridge
