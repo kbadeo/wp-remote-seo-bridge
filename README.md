@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.9.0  
+**Version:** 1.9.1  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -433,6 +433,9 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.9.1
+- **Fix:** SEO plugin detection now prefers an ACTIVE plugin (version constant defined) over leftover options. Previously a leftover `rank-math-options-general` option made Yoast sites report `rankmath`, so `/meta` wrote `rank_math_*` keys that Yoast ignored (success:true, nothing changed live).
 
 ### 1.9.0
 - Merged in the standalone SEO Data Exporter plugin as a "SEO Exporter" tab on the admin settings page, so a separate plugin install is no longer needed

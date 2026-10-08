@@ -11,7 +11,7 @@
  *               and can push a fully custom llms.txt file directly to the site root.
  *               Includes a CSV SEO exporter (Yoast/Rank Math/AIOSEO), with per-post/term
  *               and sitewide JSON-LD schema columns, on its own admin settings tab.
- * Version:      1.9.0
+ * Version:      1.9.1
  * Author:       Karl Badeo
  * License:      MIT
  * Requires PHP: 7.4
@@ -19,7 +19,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WSEB_VERSION',   '1.9.0' );
+define( 'WSEB_VERSION',   '1.9.1' );
 define( 'WSEB_OPTION',    'wseb_settings' );
 define( 'WSEB_NS',        'wseb/v1' );
 define( 'WSEB_LOG_TABLE', 'wseb_audit_log' );
@@ -129,8 +129,13 @@ function wseb_ok( $data = [] ) {
 // =============================================================================
 
 function wseb_detect_seo_plugin() {
-    if ( defined( 'RANK_MATH_VERSION' ) || get_option( 'rank-math-options-general' ) !== false ) return 'rankmath';
-    if ( defined( 'WPSEO_VERSION' )     || get_option( 'wpseo' )             !== false ) return 'yoast';
+    // An ACTIVE plugin (its version constant is defined) always wins. Leftover options from a plugin that was
+    // deactivated/removed must not win just because they are checked first - that mis-detected Yoast sites as Rank Math.
+    if ( defined( 'RANK_MATH_VERSION' ) ) return 'rankmath';
+    if ( defined( 'WPSEO_VERSION' ) )     return 'yoast';
+    // Nothing active: fall back to leftover options so reads of old data still work.
+    if ( get_option( 'rank-math-options-general' ) !== false ) return 'rankmath';
+    if ( get_option( 'wpseo' )                     !== false ) return 'yoast';
     return 'none';
 }
 
