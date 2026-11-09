@@ -1,6 +1,7 @@
 <?php
 /**
- * The CSV SEO exporter tab, merged from the standalone SEO Data Exporter plugin.
+ * The CSV SEO exporter tab, merged from the standalone SEO Data Exporter plugin. Also registers
+ * the `admin_post_wseb_export_download` and `wp_ajax_wseb_export_counts` hooks it needs.
  *
  * Part of WP Remote SEO Bridge; loaded from wp-remote-seo-bridge.php.
  */

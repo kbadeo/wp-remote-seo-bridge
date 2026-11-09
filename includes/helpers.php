@@ -42,6 +42,14 @@ function wseb_deny( $msg = 'Unauthorized' ) {
  * Build the permission_callback for a REST route. Every route must use this,
  * so the endpoint toggle and token check run in one place before the handler
  * and a new route cannot be left open by forgetting the check.
+ *
+ * Adding an endpoint means touching four places: the route in rest-routes.php, its default toggle in
+ * activation.php, its label in the endpoint list in admin-page.php, and the route count in
+ * tests/auth-test.php.
+ *
+ * @param string $endpoint_key Toggle key, the route path with dashes turned into underscores.
+ * @return Closure Takes the WP_REST_Request; returns true, or a 401 WP_Error when the endpoint is
+ *                 disabled or the token is missing, wrong or expired.
  */
 function wseb_permission( $endpoint_key ) {
     return function ( WP_REST_Request $req ) use ( $endpoint_key ) {

@@ -1,6 +1,7 @@
 <?php
 /**
- * The Settings > Remote SEO Bridge admin page (settings tab).
+ * The Settings > Remote SEO Bridge admin page: page chrome, tab routing (Settings and SEO Exporter),
+ * and the Settings tab with its form handlers (token, endpoint toggles, ACF sync, llms.txt toggle).
  *
  * Part of WP Remote SEO Bridge; loaded from wp-remote-seo-bridge.php.
  */

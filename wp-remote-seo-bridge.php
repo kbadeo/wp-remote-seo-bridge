@@ -28,15 +28,25 @@ define( 'WSEB_LOG_TABLE', 'wseb_audit_log' );
 // LOAD MODULES
 // =============================================================================
 
-require_once __DIR__ . '/includes/activation.php';
-require_once __DIR__ . '/includes/helpers.php';
-require_once __DIR__ . '/includes/seo-meta.php';
-require_once __DIR__ . '/includes/llms.php';
-require_once __DIR__ . '/includes/schema.php';
-require_once __DIR__ . '/includes/cache.php';
-require_once __DIR__ . '/includes/admin-page.php';
-require_once __DIR__ . '/includes/exporter.php';
-require_once __DIR__ . '/includes/rest-routes.php';
+$wseb_modules = [ 'activation', 'helpers', 'seo-meta', 'llms', 'schema', 'cache', 'admin-page', 'exporter', 'rest-routes' ];
+$wseb_missing = [];
+foreach ( $wseb_modules as $wseb_module ) {
+    if ( ! is_readable( __DIR__ . '/includes/' . $wseb_module . '.php' ) ) $wseb_missing[] = $wseb_module . '.php';
+}
+if ( $wseb_missing ) {
+    // Copying only this file (as older versions allowed) would otherwise be a fatal error on every
+    // request. Check every module first so a partial install loads nothing, show a notice, and stay
+    // inactive.
+    add_action( 'admin_notices', function () use ( $wseb_missing ) {
+        echo '<div class="notice notice-error"><p>WP Remote SEO Bridge is incomplete and inactive. '
+            . 'Install the whole plugin folder, including includes/. Missing: '
+            . esc_html( implode( ', ', $wseb_missing ) ) . '.</p></div>';
+    } );
+    return;
+}
+foreach ( $wseb_modules as $wseb_module ) {
+    require_once __DIR__ . '/includes/' . $wseb_module . '.php';
+}
 
 // Must be registered from the main plugin file so __FILE__ is the plugin's own path.
 register_activation_hook( __FILE__, 'wseb_activate' );

@@ -85,7 +85,7 @@ Confirms the bridge is reachable and the token is valid. Use this at the start o
 ```json
 {
   "success": true,
-  "version": "1.9.0",
+  "version": "1.9.3",
   "site": "https://yoursite.com",
   "seo_plugin": "rankmath",
   "php": "8.1.0"
@@ -108,7 +108,7 @@ Returns environment information including SEO plugin, HFS plugin variant, WooCom
   "wp_version": "6.5.0",
   "php_version": "8.1.0",
   "db_version": "8.0.0",
-  "plugin_version": "1.9.0"
+  "plugin_version": "1.9.3"
 }
 ```
 
@@ -456,10 +456,21 @@ Every route's `permission_callback` comes from `wseb_permission( 'endpoint_key' 
 php tests/auth-test.php
 ```
 
-It stubs the few WordPress functions the plugin uses, loads the plugin, and checks every route
-against seven request cases (no token, wrong token, right token, legacy header, no token configured,
-endpoint disabled, expired token). It exits 1 on any failure. Update the expected route count in the
-script when you add a route.
+It stubs the few WordPress functions the plugin uses, loads the plugin, and checks every route's
+`permission_callback` against seven request cases (no token, wrong token, right token, legacy header, no token configured,
+endpoint disabled, expired token). It also checks that a copy of the plugin with a module missing stays inactive instead of crashing. It
+exits 1 on any failure. **It covers the permission check only.** Route handlers, activation, the admin
+page and the exporter are not exercised, and `add_action` is stubbed so no hook callbacks run. Update
+the expected route count in the script when you add a route (it counts `register_rest_route` calls,
+which is 13; some URLs have separate GET and POST registrations).
+
+---
+
+## Release checklist
+
+The version appears in four places: the plugin header and `WSEB_VERSION` in `wp-remote-seo-bridge.php`,
+`**Version:**` at the top of this file, and a new entry in the changelog below. Update all four, and
+run `php tests/auth-test.php`.
 
 ---
 
@@ -472,7 +483,7 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ## Changelog
 
 ### 1.9.3
-- **Structure:** split the single 1,849-line plugin file into `includes/` modules (activation, helpers, seo-meta, llms, schema, cache, admin-page, exporter, rest-routes). No behaviour change: the same 51 functions exist and every route answers every auth case exactly as in 1.9.2. **Install the whole folder, not just the main file.**
+- **Structure:** split the single 1,836-line plugin file into `includes/` modules (activation, helpers, seo-meta, llms, schema, cache, admin-page, exporter, rest-routes). No behaviour change: the same 51 functions exist and every route answers every auth case exactly as in 1.9.2. **Install the whole folder, not just the main file.** If `includes/` is missing the plugin stays inactive and shows an admin notice naming the missing files, instead of crashing the site.
 - **Tests:** added `tests/auth-test.php`, which checks the toggle and token handling on all 13 routes without needing WordPress.
 
 ### 1.9.2

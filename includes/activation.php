@@ -1,6 +1,6 @@
 <?php
 /**
- * Activation hook callback and the audit-log table.
+ * Activation callback, the audit-log table and `wseb_log()`, which every REST handler calls.
  *
  * Part of WP Remote SEO Bridge; loaded from wp-remote-seo-bridge.php.
  */
