@@ -11,7 +11,7 @@
  *               and can push a fully custom llms.txt file directly to the site root.
  *               Includes a CSV SEO exporter (Yoast/Rank Math/AIOSEO), with per-post/term
  *               and sitewide JSON-LD schema columns, on its own admin settings tab.
- * Version:      1.9.1
+ * Version:      1.9.2
  * Author:       Karl Badeo
  * License:      MIT
  * Requires PHP: 7.4
@@ -19,7 +19,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'WSEB_VERSION',   '1.9.1' );
+define( 'WSEB_VERSION',   '1.9.2' );
 define( 'WSEB_OPTION',    'wseb_settings' );
 define( 'WSEB_NS',        'wseb/v1' );
 define( 'WSEB_LOG_TABLE', 'wseb_audit_log' );
@@ -118,6 +118,19 @@ function wseb_auth( WP_REST_Request $req ) {
 
 function wseb_deny( $msg = 'Unauthorized' ) {
     return new WP_Error( 'wseb_denied', $msg, [ 'status' => 401 ] );
+}
+
+/**
+ * Build the permission_callback for a REST route. Every route must use this,
+ * so the endpoint toggle and token check run in one place before the handler
+ * and a new route cannot be left open by forgetting the check.
+ */
+function wseb_permission( $endpoint_key ) {
+    return function ( WP_REST_Request $req ) use ( $endpoint_key ) {
+        if ( ! wseb_ep_enabled( $endpoint_key ) ) return wseb_deny( 'Endpoint disabled' );
+        if ( ! wseb_auth( $req ) )                return wseb_deny();
+        return true;
+    };
 }
 
 function wseb_ok( $data = [] ) {
@@ -1478,10 +1491,8 @@ function wseb_register_routes() {
     // ── GET /ping ─────────────────────────────────────────────────────────────
     register_rest_route( WSEB_NS, '/ping', [
         'methods'             => 'GET',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'ping' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'ping' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )         return wseb_deny();
             wseb_log( 'ping', 'GET', 'read', 'ok' );
             return wseb_ok( [
                 'version'    => WSEB_VERSION,
@@ -1495,10 +1506,8 @@ function wseb_register_routes() {
     // ── GET /health ───────────────────────────────────────────────────────────
     register_rest_route( WSEB_NS, '/health', [
         'methods'             => 'GET',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'health' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'health' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )            return wseb_deny();
             global $wpdb;
             wseb_log( 'health', 'GET', 'read', 'ok' );
             return wseb_ok( [
@@ -1516,10 +1525,8 @@ function wseb_register_routes() {
     // ── GET /scan — list all published posts, pages, products, CPTs ───────────
     register_rest_route( WSEB_NS, '/scan', [
         'methods'             => 'GET',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'scan' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'scan' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )          return wseb_deny();
 
             $post_type_param = sanitize_text_field( $req->get_param( 'post_type' ) ?: 'any' );
             $per_page        = min( absint( $req->get_param( 'per_page' ) ?: 200 ), 500 );
@@ -1569,10 +1576,8 @@ function wseb_register_routes() {
     // ── GET /scan-terms — list all terms in public taxonomies ─────────────────
     register_rest_route( WSEB_NS, '/scan-terms', [
         'methods'             => 'GET',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'scan_terms' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'scan_terms' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )                return wseb_deny();
 
             $tax_param = sanitize_text_field( $req->get_param( 'taxonomy' ) ?: 'any' );
 
@@ -1615,10 +1620,8 @@ function wseb_register_routes() {
     // ── POST /meta — write SEO meta to posts, pages, products ────────────────
     register_rest_route( WSEB_NS, '/meta', [
         'methods'             => 'POST',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'meta' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'meta' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )          return wseb_deny();
 
             $body = $req->get_json_params();
             if ( ! $body ) return new WP_Error( 'wseb_bad_request', 'Empty or invalid JSON body', [ 'status' => 400 ] );
@@ -1650,10 +1653,8 @@ function wseb_register_routes() {
     // ── POST /meta-terms — write SEO meta to taxonomy terms ──────────────────
     register_rest_route( WSEB_NS, '/meta-terms', [
         'methods'             => 'POST',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'meta_terms' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'meta_terms' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )                return wseb_deny();
 
             $body = $req->get_json_params();
             if ( ! $body ) return new WP_Error( 'wseb_bad_request', 'Empty or invalid JSON body', [ 'status' => 400 ] );
@@ -1691,10 +1692,8 @@ function wseb_register_routes() {
     // ── GET /llms-settings — read llms.txt config for the detected SEO plugin ─
     register_rest_route( WSEB_NS, '/llms-settings', [
         'methods'             => 'GET',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'llms_settings' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'llms_settings' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )                   return wseb_deny();
             wseb_log( 'llms_settings', 'GET', 'read', 'ok' );
             return wseb_ok( wseb_get_llms_settings() );
         },
@@ -1703,10 +1702,8 @@ function wseb_register_routes() {
     // ── POST /llms-settings — update llms.txt config for the detected SEO plugin
     register_rest_route( WSEB_NS, '/llms-settings', [
         'methods'             => 'POST',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'llms_settings' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'llms_settings' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )                   return wseb_deny();
 
             $body = $req->get_json_params();
             if ( ! is_array( $body ) ) return new WP_Error( 'wseb_bad_request', 'Empty or invalid JSON body', [ 'status' => 400 ] );
@@ -1724,10 +1721,8 @@ function wseb_register_routes() {
     // ── GET /llms-txt — read the raw llms.txt file at the site root ──────────
     register_rest_route( WSEB_NS, '/llms-txt', [
         'methods'             => 'GET',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'llms_txt' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'llms_txt' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )              return wseb_deny();
             $fs   = wseb_init_filesystem();
             $path = wseb_llms_txt_path();
             wseb_log( 'llms_txt', 'GET', 'read', 'ok' );
@@ -1744,10 +1739,8 @@ function wseb_register_routes() {
     //    entirely — a real file at this path wins at the webserver level.
     register_rest_route( WSEB_NS, '/llms-txt', [
         'methods'             => 'POST',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'llms_txt' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'llms_txt' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )              return wseb_deny();
 
             $body    = $req->get_json_params();
             $content = $body['content'] ?? '';
@@ -1771,10 +1764,8 @@ function wseb_register_routes() {
     //    attach to term pages) ───────────────────────────────────────────────
     register_rest_route( WSEB_NS, '/schema', [
         'methods'             => 'POST',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'schema' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'schema' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )             return wseb_deny();
 
             $body     = $req->get_json_params();
             $schema   = $body['schema'] ?? '';
@@ -1815,10 +1806,8 @@ function wseb_register_routes() {
     // ── POST /sitewide-schema — write to global HFS head ─────────────────────
     register_rest_route( WSEB_NS, '/sitewide-schema', [
         'methods'             => 'POST',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'sitewide_schema' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'sitewide_schema' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )                     return wseb_deny();
 
             $body   = $req->get_json_params();
             $schema = $body['schema'] ?? '';
@@ -1834,10 +1823,8 @@ function wseb_register_routes() {
     // ── POST /purge-cache ─────────────────────────────────────────────────────
     register_rest_route( WSEB_NS, '/purge-cache', [
         'methods'             => 'POST',
-        'permission_callback' => '__return_true',
+        'permission_callback' => wseb_permission( 'purge_cache' ),
         'callback'            => function ( WP_REST_Request $req ) {
-            if ( ! wseb_ep_enabled( 'purge_cache' ) ) return wseb_deny( 'Endpoint disabled' );
-            if ( ! wseb_auth( $req ) )                 return wseb_deny();
             $body    = $req->get_json_params();
             $post_id = absint( $body['post_id'] ?? 0 ) ?: null;
             wseb_purge_cache( $post_id );

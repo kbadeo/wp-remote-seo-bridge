@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.9.1  
+**Version:** 1.9.2  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -433,6 +433,9 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.9.2
+- **Hardening:** every REST route now gets its endpoint toggle and token check from one shared `permission_callback` (`wseb_permission()`), replacing 13 hand-written checks inside the handlers and the `__return_true` permission callbacks. A route added later can no longer be left open by forgetting the check. Responses are unchanged (401 for a bad token or a disabled endpoint).
 
 ### 1.9.1
 - **Fix:** SEO plugin detection now prefers an ACTIVE plugin (version constant defined) over leftover options. Previously a leftover `rank-math-options-general` option made Yoast sites report `rankmath`, so `/meta` wrote `rank_math_*` keys that Yoast ignored (success:true, nothing changed live).
