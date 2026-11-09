@@ -1,6 +1,6 @@
 # WP Remote SEO Bridge
 
-**Version:** 1.9.2  
+**Version:** 1.9.3  
 **Author:** Karl Badeo  
 **License:** MIT  
 **Requires PHP:** 7.4+  
@@ -426,6 +426,43 @@ POST /schema  {"post_id": 12, "schema": "..."}
 
 ---
 
+## Installing and project layout
+
+The plugin is now several files, so install it as a folder (or a zip of the folder), not by copying
+`wp-remote-seo-bridge.php` on its own. The plugin will not load without `includes/`.
+
+```
+wp-remote-seo-bridge/
+  wp-remote-seo-bridge.php   plugin header, constants, loads the modules below
+  includes/
+    activation.php           activation callback and the audit-log table
+    helpers.php              settings access, token auth, response helpers
+    seo-meta.php             SEO plugin detection, post and term meta read/write
+    llms.php                 llms.txt settings and the custom llms.txt push
+    schema.php               JSON-LD storage for posts, terms and the sitewide header
+    cache.php                cache purging after a push
+    admin-page.php           Settings > Remote SEO Bridge (settings tab)
+    exporter.php             the CSV exporter tab
+    rest-routes.php          REST routes for the wseb/v1 namespace
+  tests/auth-test.php        auth regression test (no WordPress needed)
+```
+
+Every route's `permission_callback` comes from `wseb_permission( 'endpoint_key' )` in
+`includes/helpers.php`, which checks the endpoint toggle and the token. Add new routes with it.
+
+### Running the tests
+
+```
+php tests/auth-test.php
+```
+
+It stubs the few WordPress functions the plugin uses, loads the plugin, and checks every route
+against seven request cases (no token, wrong token, right token, legacy header, no token configured,
+endpoint disabled, expired token). It exits 1 on any failure. Update the expected route count in the
+script when you add a route.
+
+---
+
 ## Audit Log
 
 Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, method, scope, status, IP, and note. Last 50 entries visible in the admin panel.
@@ -433,6 +470,10 @@ Every API call is logged to `{prefix}_wseb_audit_log` with timestamp, endpoint, 
 ---
 
 ## Changelog
+
+### 1.9.3
+- **Structure:** split the single 1,849-line plugin file into `includes/` modules (activation, helpers, seo-meta, llms, schema, cache, admin-page, exporter, rest-routes). No behaviour change: the same 51 functions exist and every route answers every auth case exactly as in 1.9.2. **Install the whole folder, not just the main file.**
+- **Tests:** added `tests/auth-test.php`, which checks the toggle and token handling on all 13 routes without needing WordPress.
 
 ### 1.9.2
 - **Hardening:** every REST route now gets its endpoint toggle and token check from one shared `permission_callback` (`wseb_permission()`), replacing 13 hand-written checks inside the handlers and the `__return_true` permission callbacks. A route added later can no longer be left open by forgetting the check. Responses are unchanged (401 for a bad token or a disabled endpoint).
